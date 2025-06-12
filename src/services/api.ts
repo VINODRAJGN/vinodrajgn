@@ -21,6 +21,7 @@ class ApiService {
     }
 
     return data.map(vehicle => ({
+      id: vehicle.id,
       chassis: vehicle.chassis_number,
       reg: vehicle.registration_number,
       depot: vehicle.depot,
@@ -31,8 +32,7 @@ class ApiService {
       model: vehicle.model,
       colour: vehicle.colour,
       seating: vehicle.seating_capacity?.toString(),
-      motorKw: vehicle.motor_power_kw?.toString(),
-      id: vehicle.id
+      motorKw: vehicle.motor_power_kw?.toString()
     }));
   }
 
@@ -56,7 +56,7 @@ class ApiService {
       chassis: complaint.vehicles.chassis_number,
       text: complaint.description,
       date: complaint.created_at,
-      status: complaint.status.toLowerCase() as 'open' | 'cleared',
+      status: complaint.status.toLowerCase() === 'open' ? 'open' : 'cleared',
       vehicleReg: complaint.vehicles.registration_number,
       vehicleDepot: complaint.vehicles.depot
     }));
@@ -90,7 +90,7 @@ class ApiService {
       chassis: chassisNumber,
       text: complaint.description,
       date: complaint.created_at,
-      status: complaint.status.toLowerCase() as 'open' | 'cleared'
+      status: complaint.status.toLowerCase() === 'open' ? 'open' : 'cleared'
     }));
   }
 
@@ -135,7 +135,7 @@ class ApiService {
       chassis: complaint.chassis,
       text: data.description,
       date: data.created_at,
-      status: data.status.toLowerCase() as 'open' | 'cleared'
+      status: data.status.toLowerCase() === 'open' ? 'open' : 'cleared'
     };
   }
 
@@ -163,7 +163,7 @@ class ApiService {
       chassis: data.vehicles.chassis_number,
       text: data.description,
       date: data.created_at,
-      status: data.status.toLowerCase() as 'open' | 'cleared'
+      status: data.status.toLowerCase() === 'open' ? 'open' : 'cleared'
     };
   }
 
