@@ -4,7 +4,7 @@ import { authService } from '../services/auth';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
 }
@@ -24,15 +24,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    setUser(currentUser);
-    setLoading(false);
+    checkAuthStatus();
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const checkAuthStatus = async () => {
+    try {
+      const currentUser = await authService.checkAuthStatus();
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Auth check failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email: string, password: string): Promise<boolean> => {
     setLoading(true);
     try {
-      const loggedInUser = await authService.login(username, password);
+      const loggedInUser = await authService.login(email, password);
       if (loggedInUser) {
         setUser(loggedInUser);
         return true;
@@ -43,8 +52,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    authService.logout();
+  const logout = async () => {
+    await authService.logout();
     setUser(null);
   };
 

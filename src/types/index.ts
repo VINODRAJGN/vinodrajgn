@@ -5,6 +5,7 @@ export interface User {
 }
 
 export interface Vehicle {
+  id?: string;
   chassis: string;
   reg?: string;
   depot?: string;
@@ -24,6 +25,8 @@ export interface Complaint {
   text: string;
   date: string;
   status: 'open' | 'cleared';
+  vehicleReg?: string;
+  vehicleDepot?: string;
 }
 
 export interface OdometerReading {
@@ -31,6 +34,7 @@ export interface OdometerReading {
   chassis: string;
   value: number;
   date: string;
+  vehicleReg?: string;
 }
 
 export interface FileUpload {

@@ -3,7 +3,7 @@ import { LogIn, User, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, loading } = useAuth();
@@ -12,12 +12,12 @@ export const Login: React.FC = () => {
     e.preventDefault();
     setError('');
     
-    if (!username.trim() || !password.trim()) {
-      setError('Please enter both username and password');
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password');
       return;
     }
 
-    const success = await login(username.trim(), password.trim());
+    const success = await login(email.trim(), password.trim());
     if (!success) {
       setError('Invalid credentials');
     }
@@ -36,18 +36,18 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-              Username
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              Email
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
-                placeholder="Enter your username"
+                placeholder="Enter your email"
                 disabled={loading}
               />
             </div>
@@ -87,11 +87,9 @@ export const Login: React.FC = () => {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p className="mb-2">Demo Credentials:</p>
+          <p className="mb-2">You need to create an account in Supabase first</p>
           <div className="space-y-1 text-xs">
-            <p><strong>Admin:</strong> admin / admin</p>
-            <p><strong>Upload:</strong> upload / upload</p>
-            <p><strong>Guest:</strong> guest / guest</p>
+            <p>Use the "Connect to Supabase" button above to set up your database</p>
           </div>
         </div>
       </div>

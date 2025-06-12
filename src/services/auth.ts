@@ -1,39 +1,78 @@
+import { supabase } from '../supabaseClient';
 import { User } from '../types';
 
-const mockUsers: User[] = [
-  { id: '1', username: 'admin', role: 'admin' },
-  { id: '2', username: 'upload', role: 'upload' },
-  { id: '3', username: 'guest', role: 'guest' }
-];
-
-const mockCredentials = {
-  admin: 'admin',
-  upload: 'upload',
-  guest: 'guest'
-};
-
 export class AuthService {
-  async login(username: string, password: string): Promise<User | null> {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    if (mockCredentials[username as keyof typeof mockCredentials] === password) {
-      const user = mockUsers.find(u => u.username === username);
-      if (user) {
+  async login(email: string, password: string): Promise<User | null> {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Login error:', error.message);
+        return null;
+      }
+
+      if (data.user) {
+        const user: User = {
+          id: data.user.id,
+          username: data.user.email?.split('@')[0] || 'user',
+          role: this.getUserRole(data.user.email || '')
+        };
+        
         localStorage.setItem('currentUser', JSON.stringify(user));
         return user;
       }
+
+      return null;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return null;
     }
-    return null;
   }
 
-  logout(): void {
-    localStorage.removeItem('currentUser');
+  async logout(): Promise<void> {
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('currentUser');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   }
 
   getCurrentUser(): User | null {
     const userStr = localStorage.getItem('currentUser');
     return userStr ? JSON.parse(userStr) : null;
+  }
+
+  private getUserRole(email: string): 'admin' | 'upload' | 'guest' {
+    // Simple role assignment based on email
+    if (email.includes('admin')) return 'admin';
+    if (email.includes('upload')) return 'upload';
+    return 'guest';
+  }
+
+  async checkAuthStatus(): Promise<User | null> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const appUser: User = {
+          id: user.id,
+          username: user.email?.split('@')[0] || 'user',
+          role: this.getUserRole(user.email || '')
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(appUser));
+        return appUser;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      return null;
+    }
   }
 }
 

@@ -49,10 +49,6 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
     }
   };
 
-  const getVehicleInfo = (chassis: string) => {
-    return vehicles.find(v => v.chassis === chassis) || { reg: 'Unknown', depot: 'Unknown' };
-  };
-
   const filteredComplaints = complaints.filter(complaint => 
     statusFilter === 'all' || complaint.status === statusFilter
   );
@@ -117,66 +113,63 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
                   </td>
                 </tr>
               ) : (
-                filteredComplaints.map((complaint, index) => {
-                  const vehicleInfo = getVehicleInfo(complaint.chassis);
-                  return (
-                    <tr
-                      key={complaint.id}
-                      className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                      }`}
-                    >
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        {vehicleInfo.reg}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {vehicleInfo.depot}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {complaint.text}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {new Date(complaint.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
-                            complaint.status === 'open'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-green-100 text-green-800'
-                          }`}
-                        >
-                          {complaint.status === 'open' ? (
-                            <AlertCircle className="h-4 w-4" />
-                          ) : (
-                            <CheckCircle className="h-4 w-4" />
-                          )}
-                          <span className="capitalize">{complaint.status}</span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {complaint.status === 'open' && user?.role === 'admin' ? (
-                          <button
-                            onClick={() => handleCloseComplaint(complaint.id)}
-                            disabled={updatingComplaint === complaint.id}
-                            className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {updatingComplaint === complaint.id ? (
-                              <div className="flex items-center space-x-2">
-                                <Loader className="h-4 w-4 animate-spin" />
-                                <span>Closing...</span>
-                              </div>
-                            ) : (
-                              'Close'
-                            )}
-                          </button>
+                filteredComplaints.map((complaint, index) => (
+                  <tr
+                    key={complaint.id}
+                    className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                    }`}
+                  >
+                    <td className="px-6 py-4 font-medium text-gray-900">
+                      {complaint.vehicleReg || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 text-gray-700">
+                      {complaint.vehicleDepot || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 text-gray-700">
+                      {complaint.text}
+                    </td>
+                    <td className="px-6 py-4 text-gray-700">
+                      {new Date(complaint.date).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span
+                        className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
+                          complaint.status === 'open'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}
+                      >
+                        {complaint.status === 'open' ? (
+                          <AlertCircle className="h-4 w-4" />
                         ) : (
-                          <span className="text-gray-400 font-medium">Locked</span>
+                          <CheckCircle className="h-4 w-4" />
                         )}
-                      </td>
-                    </tr>
-                  );
-                })
+                        <span className="capitalize">{complaint.status}</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {complaint.status === 'open' && user?.role === 'admin' ? (
+                        <button
+                          onClick={() => handleCloseComplaint(complaint.id)}
+                          disabled={updatingComplaint === complaint.id}
+                          className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {updatingComplaint === complaint.id ? (
+                            <div className="flex items-center space-x-2">
+                              <Loader className="h-4 w-4 animate-spin" />
+                              <span>Closing...</span>
+                            </div>
+                          ) : (
+                            'Close'
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 font-medium">Locked</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
