@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Loader, Filter } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader, Filter, Plus } from 'lucide-react';
 import { Complaint, Vehicle } from '../../types';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,6 +13,13 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'cleared'>('all');
   const [updatingComplaint, setUpdatingComplaint] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addingComplaint, setAddingComplaint] = useState(false);
+  const [newComplaint, setNewComplaint] = useState({
+    chassis: '',
+    text: '',
+    status: 'open'
+  });
   const { user } = useAuth();
 
   useEffect(() => {

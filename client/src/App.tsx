@@ -9,7 +9,7 @@ import { RetroPage } from './components/pages/RetroPage';
 import { ComplaintsPage } from './components/pages/ComplaintsPage';
 import { OdometerPage } from './components/pages/OdometerPage';
 import { VehicleDetailsPage } from './components/pages/VehicleDetailsPage';
-import { VehicleManagementPage } from './components/pages/VehicleManagementPage';
+
 import { Vehicle } from './types';
 import { apiService } from './services/api';
 
@@ -71,8 +71,7 @@ const AppContent: React.FC = () => {
         return <ComplaintsPage vehicles={vehicles} />;
       case 'odometer':
         return <OdometerPage />;
-      case 'manage':
-        return <VehicleManagementPage />;
+
       case 'vehicle-details':
         return selectedVehicle ? (
           <VehicleDetailsPage vehicle={selectedVehicle} onBack={handleBackToHome} />

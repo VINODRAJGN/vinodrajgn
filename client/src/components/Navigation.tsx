@@ -9,7 +9,7 @@ interface NavigationProps {
 export const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'manage', label: 'Vehicle Management', icon: Settings },
+
     { id: 'sop', label: 'SOP for Maintenance', icon: FileText },
     { id: 'retro', label: 'Retro Summary', icon: Wrench },
     { id: 'complaints', label: 'Complaints Summary', icon: AlertCircle },

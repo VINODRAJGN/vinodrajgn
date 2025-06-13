@@ -47,7 +47,8 @@ export class AuthService {
   }
 
   private getUserRole(email: string): 'admin' | 'upload' | 'guest' {
-    // Simple role assignment based on email
+    // Give vr@gmail.com admin access for full functionality
+    if (email === 'vr@gmail.com') return 'admin';
     if (email.includes('admin')) return 'admin';
     if (email.includes('upload')) return 'upload';
     return 'guest';
