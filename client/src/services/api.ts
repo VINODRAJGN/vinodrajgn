@@ -18,54 +18,58 @@ class ApiService {
       console.log('Current user:', user?.email || 'No user logged in');
       
       // Check what tables exist in the database
-      console.log('Scanning database for tables with data...');
+      // Check the actual structure of the vehicles table
+      console.log('Checking vehicles table structure...');
       
-      // Try to query common table names that might contain vehicle data
-      const possibleTableNames = [
-        'vehicles', 'vehicle', 'Vehicle', 'VEHICLES',
-        'vehicle_data', 'VehicleData', 'fleet', 'Fleet',
-        'auto', 'cars', 'buses', 'transport', 'vehicle_list',
-        'master_vehicles', 'vehicle_master', 'tbl_vehicles',
-        'bus', 'Bus', 'electric_vehicles'
-      ];
-      
-      const tablesWithData = [];
-      
-      for (const tableName of possibleTableNames) {
-        try {
-          const { data: testData, error: testError, count } = await supabase
-            .from(tableName)
-            .select('*', { count: 'exact' })
-            .limit(2);
-            
-          if (!testError && count && count > 0) {
-            console.log(`✓ Found table '${tableName}' with ${count} records:`, testData);
-            tablesWithData.push({ name: tableName, count, sample: testData });
-          }
-        } catch (e) {
-          // Table doesn't exist, continue silently
-        }
-      }
-      
-      console.log('Tables with data found:', tablesWithData.length);
-      
-      // If we found tables with data, use the one with most records
-      if (tablesWithData.length > 0) {
-        const bestTable = tablesWithData.reduce((prev, current) => 
-          (prev.count > current.count) ? prev : current
-        );
+      // Get the actual column names from the vehicles table
+      const { data: sampleInsert, error: insertError } = await supabase
+        .from('vehicles')
+        .insert({
+          chassis_number: 'TEST_CHASSIS_001',
+          registration_number: 'TEST_REG_001',
+          depot: 'Test Depot',
+          motor_number: 'TEST_MOTOR_001',
+          model: 'Test Model',
+          colour: 'White',
+          seating_capacity: 50,
+          motor_power_kw: 150
+        })
+        .select()
+        .single();
         
-        console.log(`Using table '${bestTable.name}' with ${bestTable.count} records`);
+      if (!insertError && sampleInsert) {
+        console.log('Successfully inserted test vehicle, table structure confirmed:', sampleInsert);
         
-        // Query the table with the most data
-        const { data: vehicleData, error: vehicleError } = await supabase
-          .from(bestTable.name)
-          .select('*');
+        // Now delete the test record
+        await supabase
+          .from('vehicles')
+          .delete()
+          .eq('chassis_number', 'TEST_CHASSIS_001');
           
-        if (!vehicleError && vehicleData) {
-          console.log(`Successfully loaded ${vehicleData.length} vehicles from '${bestTable.name}'`);
-          data = vehicleData;
-          error = null;
+        console.log('Test record cleaned up');
+      } else {
+        console.log('Insert test failed:', insertError?.message);
+        
+        // Try with different column names
+        const alternativeSchemas = [
+          { chassis: 'TEST001', reg: 'TESTREG001', depot: 'TestDepot' },
+          { vehicle_number: 'TEST001', registration: 'TESTREG001', location: 'TestLocation' },
+          { chassis_no: 'TEST001', reg_no: 'TESTREG001', depot_name: 'TestDepot' }
+        ];
+        
+        for (const schema of alternativeSchemas) {
+          const { data: testInsert, error: testError } = await supabase
+            .from('vehicles')
+            .insert(schema)
+            .select()
+            .single();
+            
+          if (!testError) {
+            console.log('Alternative schema works:', schema, testInsert);
+            // Clean up
+            await supabase.from('vehicles').delete().eq(Object.keys(schema)[0], Object.values(schema)[0]);
+            break;
+          }
         }
       }
       
@@ -175,6 +179,45 @@ class ApiService {
     } catch (error) {
       console.error('Error in getVehicles:', error);
       return [];
+    }
+  }
+
+  async addVehicle(vehicle: {
+    chassis_number: string;
+    registration_number: string;
+    depot: string;
+    motor_number: string;
+    model: string;
+    colour: string;
+    seating_capacity: number;
+    motor_power_kw: number;
+  }): Promise<Vehicle | null> {
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert(vehicle)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Failed to add vehicle:', error);
+        throw error;
+      }
+
+      return {
+        id: data.id,
+        chassis: data.chassis_number,
+        reg: data.registration_number,
+        depot: data.depot,
+        motor: data.motor_number,
+        model: data.model,
+        colour: data.colour,
+        seating: data.seating_capacity?.toString(),
+        motorKw: data.motor_power_kw?.toString()
+      };
+    } catch (error) {
+      console.error('Error adding vehicle:', error);
+      return null;
     }
   }
 
