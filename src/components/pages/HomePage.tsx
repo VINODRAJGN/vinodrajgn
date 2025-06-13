@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Loader } from 'lucide-react';
+import { Eye, Loader, RefreshCw } from 'lucide-react';
 import { Vehicle } from '../../types';
 import { apiService } from '../../services/api';
 
@@ -20,11 +20,19 @@ export const HomePage: React.FC<HomePageProps> = ({ onViewDetails }) => {
     try {
       setLoading(true);
       setError(null);
+      console.log('HomePage: Starting to load vehicles...');
+      
       const data = await apiService.getVehicles();
+      console.log('HomePage: Received vehicles data:', data);
+      
       setVehicles(data);
+      
+      if (data.length === 0) {
+        setError('No vehicles found in the database. Please check if vehicles are properly added to the database.');
+      }
     } catch (err) {
-      setError('Failed to load vehicles');
-      console.error('Error loading vehicles:', err);
+      console.error('HomePage: Error loading vehicles:', err);
+      setError('Failed to load vehicles from database. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -54,13 +62,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onViewDetails }) => {
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-        <p className="text-red-700">{error}</p>
+        <p className="text-red-700 mb-4">{error}</p>
         <button
           onClick={loadVehicles}
-          className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          className="inline-flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
         >
-          Retry
+          <RefreshCw className="h-4 w-4" />
+          <span>Retry</span>
         </button>
+        <div className="mt-4 text-sm text-gray-600">
+          <p>Debug info:</p>
+          <p>Check browser console for detailed error messages</p>
+        </div>
       </div>
     );
   }
@@ -70,6 +83,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onViewDetails }) => {
       <div className="text-center">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Project - 13.5EV Coach Bus</h2>
         <p className="text-gray-600">Fleet Management Dashboard</p>
+        <div className="mt-2 text-sm text-gray-500">
+          Found {vehicles.length} vehicles in database
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -77,7 +93,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onViewDetails }) => {
           <table className="w-full">
             <thead>
               <tr className="bg-green-600 text-white">
-                <th className="px-6 py-4 text-left font-semibold">Vehicle Registration Number</th>
+                <th className="px-6 py-4 text-left font-semibold">Vehicle Number</th>
+                <th className="px-6 py-4 text-left font-semibold">Registration Number</th>
                 <th className="px-6 py-4 text-left font-semibold">Registration State</th>
                 <th className="px-6 py-4 text-left font-semibold">Chassis Number</th>
                 <th className="px-6 py-4 text-left font-semibold">Fleet Operation Depot</th>
@@ -87,20 +104,32 @@ export const HomePage: React.FC<HomePageProps> = ({ onViewDetails }) => {
             <tbody>
               {vehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                    No vehicles found
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    <div className="space-y-2">
+                      <p>No vehicles found</p>
+                      <button
+                        onClick={loadVehicles}
+                        className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 vehicles.map((vehicle, index) => (
                   <tr
-                    key={vehicle.chassis}
+                    key={vehicle.id || vehicle.chassis || index}
                     className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     }`}
                   >
                     <td className="px-6 py-4 font-medium text-gray-900">
-                      {vehicle.reg || 'N/A'}
+                      {vehicle.chassis}
+                    </td>
+                    <td className="px-6 py-4 text-gray-700">
+                      {vehicle.reg || 'Pending'}
                     </td>
                     <td className="px-6 py-4 text-gray-700">
                       {getRegistrationState(vehicle.reg)}
@@ -109,7 +138,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onViewDetails }) => {
                       {vehicle.chassis}
                     </td>
                     <td className="px-6 py-4 text-gray-700">
-                      {vehicle.depot || 'N/A'}
+                      {vehicle.depot || 'Not Assigned'}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
