@@ -1,190 +1,41 @@
 import { supabase } from '../supabaseClient';
-import {
-  Vehicle,
-  Complaint,
-  OdometerReading,
-  FileUpload,
-  OdometerSummary
-} from '../types';
+import { Vehicle, Complaint, OdometerReading, FileUpload, OdometerSummary } from '../types';
 
 class ApiService {
   // VEHICLES
   async getVehicles(): Promise<Vehicle[]> {
     try {
-      console.log('Fetching vehicles from database...');
-      
-      // Check current user session
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      console.log('Current user:', user?.email || 'No user logged in');
-      console.log('Current user ID:', user?.id || 'No user ID');
-      
-      // Check total count in table (may be filtered by RLS)
-      const { count: totalCount, error: totalCountError } = await supabase
+      const { data: vehicleData, error } = await supabase
         .from('vehicles')
-        .select('*', { count: 'exact', head: true });
-        
-      console.log('Vehicles visible to current user:', totalCount);
-      console.log('Count query error:', totalCountError?.message || 'none');
-      
-      // Check what tables exist in the database
-      // Check the actual structure of the vehicles table
-      console.log('Checking vehicles table structure...');
-      
-      // Get the actual column names from the vehicles table
-      const { data: sampleInsert, error: insertError } = await supabase
-        .from('vehicles')
-        .insert({
-          chassis_number: 'TEST_CHASSIS_001',
-          registration_number: 'TEST_REG_001',
-          depot: 'Test Depot',
-          motor_number: 'TEST_MOTOR_001',
-          model: 'Test Model',
-          colour: 'White',
-          seating_capacity: 50,
-          motor_power_kw: 150
-        })
-        .select()
-        .single();
-        
-      if (!insertError && sampleInsert) {
-        console.log('Successfully inserted test vehicle, table structure confirmed:', sampleInsert);
-        
-        // Now delete the test record
-        await supabase
-          .from('vehicles')
-          .delete()
-          .eq('chassis_number', 'TEST_CHASSIS_001');
-          
-        console.log('Test record cleaned up');
-      } else {
-        console.log('Insert test failed:', insertError?.message);
-        
-        // Try with different column names
-        const alternativeSchemas = [
-          { chassis: 'TEST001', reg: 'TESTREG001', depot: 'TestDepot' },
-          { vehicle_number: 'TEST001', registration: 'TESTREG001', location: 'TestLocation' },
-          { chassis_no: 'TEST001', reg_no: 'TESTREG001', depot_name: 'TestDepot' }
-        ];
-        
-        for (const schema of alternativeSchemas) {
-          const { data: testInsert, error: testError } = await supabase
-            .from('vehicles')
-            .insert(schema)
-            .select()
-            .single();
-            
-          if (!testError) {
-            console.log('Alternative schema works:', schema, testInsert);
-            // Clean up
-            await supabase.from('vehicles').delete().eq(Object.keys(schema)[0], Object.values(schema)[0]);
-            break;
-          }
-        }
-      }
-      
-      // Try direct query first
-      let { data, error } = await supabase
-        .from('vehicles')
-        .select('*');
-        
-      console.log('Direct query result:', { data, error: error?.message, dataLength: data?.length });
-      
-      // If we get empty results, try with authentication
-      if ((!data || data.length === 0) && !user) {
-        console.log('No data and no user - attempting authentication...');
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: 'vr@gmail.com',
-          password: 'Vinod@8055'
-        });
-        
-        if (authError) {
-          console.error('Authentication failed:', authError.message);
-        } else {
-          console.log('Authentication successful, retrying query...');
-          // Retry the query after authentication
-          const { data: authData2, error: authError2 } = await supabase
-            .from('vehicles')
-            .select('*');
-          console.log('Post-auth query result:', { data: authData2, error: authError2?.message, dataLength: authData2?.length });
-          data = authData2;
-          error = authError2;
-        }
-      }
-      
-      // Try with count to see if RLS is the issue
-      const { count, error: secondCountError } = await supabase
-        .from('vehicles')
-        .select('*', { count: 'exact', head: true });
-        
-      console.log('Table count:', { count, error: secondCountError?.message });
-      
-      // Try alternative column names in case the schema is different
-      if (!data || data.length === 0) {
-        console.log('Trying alternative column queries...');
-        
-        // Check what columns actually exist
-        const { data: testData, error: testError } = await supabase
-          .from('vehicles')
-          .select()
-          .limit(1);
-          
-        console.log('Sample row structure:', { testData, testError: testError?.message });
-        
-        // Try common variations
-        const columnVariations = [
-          '*',
-          'id, chassis_number, registration_number, depot',
-          'id, vehicle_number, reg_number, location',
-          'id, chassis, reg, depot',
-          'id, chassis_no, reg_no, depot_name'
-        ];
-        
-        for (const columns of columnVariations) {
-          const { data: varData, error: varError } = await supabase
-            .from('vehicles')
-            .select(columns)
-            .limit(2);
-            
-          if (!varError && varData && varData.length > 0) {
-            console.log(`Success with columns: ${columns}`, varData);
-            data = varData;
-            error = null;
-            break;
-          } else if (varError) {
-            console.log(`Failed with columns ${columns}:`, varError.message);
-          }
-        }
-      }
+        .select('*')
+        .order('registration_number');
 
       if (error) {
-        console.error('Failed to fetch vehicles:', error);
-        throw error;
-      }
-
-      console.log('Raw vehicle data from database:', data);
-
-      if (!data || data.length === 0) {
-        console.warn('No vehicles found in database');
+        console.error('Error fetching vehicles:', error);
         return [];
       }
 
-      const vehicles = data.map(vehicle => ({
+      if (!vehicleData) {
+        return [];
+      }
+
+      // Process and map vehicle data
+      const processedVehicles = vehicleData.map((vehicle: any) => ({
         id: vehicle.id,
-        chassis: vehicle.chassis_number || vehicle.vehicle_number || 'Unknown',
-        reg: vehicle.registration_number || 'Pending',
-        depot: vehicle.depot || 'Not Assigned',
-        motor: vehicle.motor_number || 'N/A',
-        dispatch: vehicle.dispatch_date || 'N/A',
-        regDate: vehicle.registration_date || 'N/A',
-        mfgDate: vehicle.manufacturing_date || 'N/A',
-        model: vehicle.model || 'N/A',
-        colour: vehicle.colour || 'N/A',
-        seating: vehicle.seating_capacity?.toString() || 'N/A',
-        motorKw: vehicle.motor_power_kw?.toString() || 'N/A'
+        chassis: vehicle.chassis_number || vehicle.vehicle_number,
+        reg: vehicle.registration_number,
+        depot: vehicle.depot,
+        motor: vehicle.motor_number,
+        dispatch: vehicle.dispatch_date,
+        regDate: vehicle.registration_date,
+        mfgDate: vehicle.manufacturing_date,
+        model: vehicle.model,
+        colour: vehicle.colour,
+        seating: vehicle.seating_capacity?.toString(),
+        motorKw: vehicle.motor_power_kw?.toString()
       }));
 
-      console.log('Processed vehicles:', vehicles);
-      return vehicles;
+      return processedVehicles;
     } catch (error) {
       console.error('Error in getVehicles:', error);
       return [];
@@ -192,25 +43,40 @@ class ApiService {
   }
 
   async addVehicle(vehicle: {
-    chassis_number: string;
-    registration_number: string;
+    chassis: string;
+    reg: string;
     depot: string;
-    motor_number: string;
+    motor: string;
+    dispatch: string;
+    regDate: string;
+    mfgDate: string;
     model: string;
     colour: string;
-    seating_capacity: number;
-    motor_power_kw: number;
+    seating: string;
+    motorKw: string;
   }): Promise<Vehicle | null> {
     try {
       const { data, error } = await supabase
         .from('vehicles')
-        .insert(vehicle)
+        .insert({
+          chassis_number: vehicle.chassis,
+          registration_number: vehicle.reg,
+          depot: vehicle.depot,
+          motor_number: vehicle.motor,
+          dispatch_date: vehicle.dispatch,
+          registration_date: vehicle.regDate,
+          manufacturing_date: vehicle.mfgDate,
+          model: vehicle.model,
+          colour: vehicle.colour,
+          seating_capacity: parseInt(vehicle.seating),
+          motor_power_kw: parseInt(vehicle.motorKw)
+        })
         .select()
         .single();
 
       if (error) {
-        console.error('Failed to add vehicle:', error);
-        throw error;
+        console.error('Error adding vehicle:', error);
+        return null;
       }
 
       return {
@@ -219,13 +85,16 @@ class ApiService {
         reg: data.registration_number,
         depot: data.depot,
         motor: data.motor_number,
+        dispatch: data.dispatch_date,
+        regDate: data.registration_date,
+        mfgDate: data.manufacturing_date,
         model: data.model,
         colour: data.colour,
         seating: data.seating_capacity?.toString(),
         motorKw: data.motor_power_kw?.toString()
       };
     } catch (error) {
-      console.error('Error adding vehicle:', error);
+      console.error('Error in addVehicle:', error);
       return null;
     }
   }
@@ -233,65 +102,59 @@ class ApiService {
   // COMPLAINTS
   async getComplaints(): Promise<Complaint[]> {
     try {
-      const { data: complaints, error } = await supabase
+      const { data, error } = await supabase
         .from('complaints')
         .select(`
           *,
-          vehicles!inner(chassis_number, registration_number, depot, vehicle_number)
+          vehicles!inner(registration_number, depot)
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Failed to fetch complaints:', error);
+        console.error('Error fetching complaints:', error);
         return [];
       }
 
-      return complaints.map(complaint => ({
+      return data?.map((complaint: any) => ({
         id: complaint.id,
-        chassis: complaint.vehicles.chassis_number || complaint.vehicles.vehicle_number,
+        chassis: complaint.chassis_number,
         text: complaint.description,
-        date: complaint.created_at,
-        status: complaint.status.toLowerCase() === 'open' ? 'open' : 'cleared',
-        vehicleReg: complaint.vehicles.registration_number,
-        vehicleDepot: complaint.vehicles.depot
-      }));
+        date: complaint.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+        status: complaint.status as 'open' | 'cleared',
+        vehicleReg: complaint.vehicles?.registration_number,
+        vehicleDepot: complaint.vehicles?.depot
+      })) || [];
     } catch (error) {
-      console.error('Error fetching complaints:', error);
+      console.error('Error in getComplaints:', error);
       return [];
     }
   }
 
   async getComplaintsByVehicle(chassisNumber: string): Promise<Complaint[]> {
     try {
-      const { data: vehicle, error: vehicleError } = await supabase
-        .from('vehicles')
-        .select('id')
-        .or(`chassis_number.eq.${chassisNumber},vehicle_number.eq.${chassisNumber}`)
-        .single();
-
-      if (vehicleError || !vehicle) {
-        console.error('Error finding vehicle:', vehicleError?.message);
-        return [];
-      }
-
       const { data, error } = await supabase
         .from('complaints')
-        .select('*')
-        .eq('vehicle_id', vehicle.id)
+        .select(`
+          *,
+          vehicles!inner(registration_number, depot)
+        `)
+        .eq('chassis_number', chassisNumber)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching complaints by vehicle:', error.message);
+        console.error('Error fetching complaints by vehicle:', error);
         return [];
       }
 
-      return data.map(complaint => ({
+      return data?.map((complaint: any) => ({
         id: complaint.id,
-        chassis: chassisNumber,
+        chassis: complaint.chassis_number,
         text: complaint.description,
-        date: complaint.created_at,
-        status: complaint.status.toLowerCase() === 'open' ? 'open' : 'cleared'
-      }));
+        date: complaint.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+        status: complaint.status as 'open' | 'cleared',
+        vehicleReg: complaint.vehicles?.registration_number,
+        vehicleDepot: complaint.vehicles?.depot
+      })) || [];
     } catch (error) {
       console.error('Error in getComplaintsByVehicle:', error);
       return [];
@@ -300,47 +163,33 @@ class ApiService {
 
   async addComplaint(complaint: { chassis: string; text: string; status: string; date: string }): Promise<Complaint | null> {
     try {
-      const { data: vehicle, error: vehicleError } = await supabase
-        .from('vehicles')
-        .select('id')
-        .or(`chassis_number.eq.${complaint.chassis},vehicle_number.eq.${complaint.chassis}`)
-        .single();
-
-      if (vehicleError || !vehicle) {
-        console.error('Error finding vehicle:', vehicleError?.message);
-        return null;
-      }
-
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) {
-        console.error('User not authenticated');
-        return null;
-      }
-
       const { data, error } = await supabase
         .from('complaints')
-        .insert([{
-          vehicle_id: vehicle.id,
-          title: 'Vehicle Complaint',
+        .insert({
+          chassis_number: complaint.chassis,
           description: complaint.text,
-          status: complaint.status === 'cleared' ? 'Closed' : 'Open',
-          priority: 'Medium',
-          user_id: user.user.id
-        }])
-        .select()
+          status: complaint.status,
+          created_at: new Date().toISOString()
+        })
+        .select(`
+          *,
+          vehicles!inner(registration_number, depot)
+        `)
         .single();
 
       if (error) {
-        console.error('Failed to add complaint:', error.message);
+        console.error('Error adding complaint:', error);
         return null;
       }
 
       return {
         id: data.id,
-        chassis: complaint.chassis,
+        chassis: data.chassis_number,
         text: data.description,
-        date: data.created_at,
-        status: data.status.toLowerCase() === 'open' ? 'open' : 'cleared'
+        date: data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+        status: data.status as 'open' | 'cleared',
+        vehicleReg: data.vehicles?.registration_number,
+        vehicleDepot: data.vehicles?.depot
       };
     } catch (error) {
       console.error('Error in addComplaint:', error);
@@ -352,28 +201,27 @@ class ApiService {
     try {
       const { data, error } = await supabase
         .from('complaints')
-        .update({ 
-          status: updates.status === 'cleared' ? 'Closed' : 'Open',
-          updated_at: new Date().toISOString()
-        })
+        .update(updates)
         .eq('id', id)
         .select(`
           *,
-          vehicles!inner(chassis_number, vehicle_number)
+          vehicles!inner(registration_number, depot)
         `)
         .single();
 
       if (error) {
-        console.error('Error updating complaint:', error.message);
+        console.error('Error updating complaint:', error);
         return null;
       }
 
       return {
         id: data.id,
-        chassis: data.vehicles.chassis_number || data.vehicles.vehicle_number,
+        chassis: data.chassis_number,
         text: data.description,
-        date: data.created_at,
-        status: data.status.toLowerCase() === 'open' ? 'open' : 'cleared'
+        date: data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+        status: data.status as 'open' | 'cleared',
+        vehicleReg: data.vehicles?.registration_number,
+        vehicleDepot: data.vehicles?.depot
       };
     } catch (error) {
       console.error('Error in updateComplaint:', error);
@@ -388,22 +236,22 @@ class ApiService {
         .from('odometer_readings')
         .select(`
           *,
-          vehicles!inner(chassis_number, registration_number, vehicle_number)
+          vehicles!inner(registration_number)
         `)
-        .order('date', { ascending: false });
+        .order('reading_date', { ascending: false });
 
       if (error) {
-        console.error('Error fetching odometer readings:', error.message);
+        console.error('Error fetching odometer readings:', error);
         return [];
       }
 
-      return data.map(reading => ({
+      return data?.map((reading: any) => ({
         id: reading.id,
-        chassis: reading.vehicles.chassis_number || reading.vehicles.vehicle_number,
-        value: reading.reading,
-        date: reading.date,
-        vehicleReg: reading.vehicles.registration_number
-      }));
+        chassis: reading.chassis_number,
+        value: reading.reading_value,
+        date: reading.reading_date,
+        vehicleReg: reading.vehicles?.registration_number
+      })) || [];
     } catch (error) {
       console.error('Error in getOdometers:', error);
       return [];
@@ -412,34 +260,27 @@ class ApiService {
 
   async getOdometersByVehicle(chassisNumber: string): Promise<OdometerReading[]> {
     try {
-      const { data: vehicle, error: vehicleError } = await supabase
-        .from('vehicles')
-        .select('id')
-        .or(`chassis_number.eq.${chassisNumber},vehicle_number.eq.${chassisNumber}`)
-        .single();
-
-      if (vehicleError || !vehicle) {
-        console.error('Error finding vehicle:', vehicleError?.message);
-        return [];
-      }
-
       const { data, error } = await supabase
         .from('odometer_readings')
-        .select('*')
-        .eq('vehicle_id', vehicle.id)
-        .order('date', { ascending: false });
+        .select(`
+          *,
+          vehicles!inner(registration_number)
+        `)
+        .eq('chassis_number', chassisNumber)
+        .order('reading_date', { ascending: false });
 
       if (error) {
-        console.error('Error fetching odometer readings by vehicle:', error.message);
+        console.error('Error fetching odometer readings by vehicle:', error);
         return [];
       }
 
-      return data.map(reading => ({
+      return data?.map((reading: any) => ({
         id: reading.id,
-        chassis: chassisNumber,
-        value: reading.reading,
-        date: reading.date
-      }));
+        chassis: reading.chassis_number,
+        value: reading.reading_value,
+        date: reading.reading_date,
+        vehicleReg: reading.vehicles?.registration_number
+      })) || [];
     } catch (error) {
       console.error('Error in getOdometersByVehicle:', error);
       return [];
@@ -448,45 +289,30 @@ class ApiService {
 
   async addOdometer(reading: { chassis: string; value: number; date: string }): Promise<OdometerReading | null> {
     try {
-      const { data: vehicle, error: vehicleError } = await supabase
-        .from('vehicles')
-        .select('id')
-        .or(`chassis_number.eq.${reading.chassis},vehicle_number.eq.${reading.chassis}`)
-        .single();
-
-      if (vehicleError || !vehicle) {
-        console.error('Error finding vehicle:', vehicleError?.message);
-        return null;
-      }
-
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) {
-        console.error('User not authenticated');
-        return null;
-      }
-
       const { data, error } = await supabase
         .from('odometer_readings')
-        .insert([{
-          vehicle_id: vehicle.id,
-          reading: reading.value,
-          date: reading.date.split('T')[0], // Extract date part
-          user_id: user.user.id,
-          notes: ''
-        }])
-        .select()
+        .insert({
+          chassis_number: reading.chassis,
+          reading_value: reading.value,
+          reading_date: reading.date
+        })
+        .select(`
+          *,
+          vehicles!inner(registration_number)
+        `)
         .single();
 
       if (error) {
-        console.error('Failed to add odometer reading:', error.message);
+        console.error('Error adding odometer reading:', error);
         return null;
       }
 
       return {
         id: data.id,
-        chassis: reading.chassis,
-        value: data.reading,
-        date: data.date
+        chassis: data.chassis_number,
+        value: data.reading_value,
+        date: data.reading_date,
+        vehicleReg: data.vehicles?.registration_number
       };
     } catch (error) {
       console.error('Error in addOdometer:', error);
@@ -494,79 +320,34 @@ class ApiService {
     }
   }
 
-  // FILE UPLOADS (SOP Documents)
+  // FILE UPLOADS
   async uploadFile(file: { name: string; content: string; chassis: string; type: 'sop' | 'retro' }): Promise<FileUpload | null> {
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) {
-        console.error('User not authenticated');
+      const { data, error } = await supabase
+        .from('file_uploads')
+        .insert({
+          file_name: file.name,
+          file_content: file.content,
+          chassis_number: file.chassis,
+          file_type: file.type,
+          uploaded_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error uploading file:', error);
         return null;
       }
 
-      if (file.type === 'sop') {
-        const { data, error } = await supabase
-          .from('sop_documents')
-          .insert([{
-            title: file.name,
-            description: `SOP document for chassis ${file.chassis}`,
-            file_url: file.content,
-            file_name: file.name,
-            user_id: user.user.id
-          }])
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error uploading SOP file:', error.message);
-          return null;
-        }
-
-        return {
-          id: data.id,
-          name: data.file_name,
-          content: data.file_url,
-          chassis: file.chassis,
-          type: 'sop',
-          uploadDate: data.created_at
-        };
-      } else {
-        // For retro files, we'll use retro_entries table
-        const { data: vehicle, error: vehicleError } = await supabase
-          .from('vehicles')
-          .select('id')
-          .or(`chassis_number.eq.${file.chassis},vehicle_number.eq.${file.chassis}`)
-          .single();
-
-        if (vehicleError || !vehicle) {
-          console.error('Error finding vehicle:', vehicleError?.message);
-          return null;
-        }
-
-        const { data, error } = await supabase
-          .from('retro_entries')
-          .insert([{
-            vehicle_id: vehicle.id,
-            entry_type: 'document',
-            description: `Retro document: ${file.name}`,
-            user_id: user.user.id
-          }])
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error uploading retro file:', error.message);
-          return null;
-        }
-
-        return {
-          id: data.id,
-          name: file.name,
-          content: file.content,
-          chassis: file.chassis,
-          type: 'retro',
-          uploadDate: data.created_at
-        };
-      }
+      return {
+        id: data.id,
+        name: data.file_name,
+        content: data.file_content,
+        chassis: data.chassis_number,
+        type: data.file_type as 'sop' | 'retro',
+        uploadDate: data.uploaded_at
+      };
     } catch (error) {
       console.error('Error in uploadFile:', error);
       return null;
@@ -575,126 +356,86 @@ class ApiService {
 
   async getFilesByType(type: 'sop' | 'retro', chassisNumber?: string): Promise<FileUpload[]> {
     try {
-      if (type === 'sop') {
-        const { data, error } = await supabase
-          .from('sop_documents')
-          .select('*')
-          .order('created_at', { ascending: false });
+      let query = supabase
+        .from('file_uploads')
+        .select('*')
+        .eq('file_type', type)
+        .order('uploaded_at', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching SOP files:', error.message);
-          return [];
-        }
-
-        return data.map(doc => ({
-          id: doc.id,
-          name: doc.file_name || doc.title,
-          content: doc.file_url || '',
-          chassis: chassisNumber || '',
-          type: 'sop',
-          uploadDate: doc.created_at
-        }));
-      } else {
-        if (!chassisNumber) return [];
-
-        const { data: vehicle, error: vehicleError } = await supabase
-          .from('vehicles')
-          .select('id')
-          .or(`chassis_number.eq.${chassisNumber},vehicle_number.eq.${chassisNumber}`)
-          .single();
-
-        if (vehicleError || !vehicle) {
-          console.error('Error finding vehicle:', vehicleError?.message);
-          return [];
-        }
-
-        const { data, error } = await supabase
-          .from('retro_entries')
-          .select('*')
-          .eq('vehicle_id', vehicle.id)
-          .eq('entry_type', 'document')
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching retro files:', error.message);
-          return [];
-        }
-
-        return data.map(entry => ({
-          id: entry.id,
-          name: entry.description.replace('Retro document: ', ''),
-          content: '', // We'll need to store file content separately
-          chassis: chassisNumber,
-          type: 'retro',
-          uploadDate: entry.created_at
-        }));
+      if (chassisNumber) {
+        query = query.eq('chassis_number', chassisNumber);
       }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching files:', error);
+        return [];
+      }
+
+      return data?.map((file: any) => ({
+        id: file.id,
+        name: file.file_name,
+        content: file.file_content,
+        chassis: file.chassis_number,
+        type: file.file_type as 'sop' | 'retro',
+        uploadDate: file.uploaded_at
+      })) || [];
     } catch (error) {
       console.error('Error in getFilesByType:', error);
       return [];
     }
   }
 
-  // SUMMARY
+  // ODOMETER SUMMARY
   async getOdometerSummary(): Promise<OdometerSummary[]> {
     try {
-      const { data: readings, error } = await supabase
-        .from('odometer_readings')
-        .select(`
-          *,
-          vehicles!inner(registration_number, depot, chassis_number, vehicle_number)
-        `)
-        .order('date', { ascending: false });
+      const { data: vehicles, error: vehicleError } = await supabase
+        .from('vehicles')
+        .select('*');
 
-      if (error) {
-        console.error('Error fetching odometer summary:', error.message);
+      const { data: readings, error: readingError } = await supabase
+        .from('odometer_readings')
+        .select('*')
+        .order('reading_date', { ascending: false });
+
+      if (vehicleError || readingError) {
+        console.error('Error fetching odometer summary data:', vehicleError || readingError);
         return [];
       }
 
-      // Group by depot and get latest reading per vehicle
-      const depotMap = new Map<string, OdometerSummary>();
-
-      readings.forEach(reading => {
-        const depot = reading.vehicles.depot || 'Unknown';
-        const vehicleReg = reading.vehicles.registration_number || reading.vehicles.vehicle_number || 'Unknown';
-        const chassisNumber = reading.vehicles.chassis_number || reading.vehicles.vehicle_number;
-
-        if (!depotMap.has(depot)) {
-          depotMap.set(depot, {
-            depot,
-            totalOdometer: 0,
-            vehicleCount: 0,
-            vehicles: []
-          });
+      // Group vehicles by depot
+      const depotGroups: { [key: string]: any[] } = {};
+      vehicles?.forEach((vehicle: any) => {
+        const depot = vehicle.depot || 'Unknown Depot';
+        if (!depotGroups[depot]) {
+          depotGroups[depot] = [];
         }
-
-        const depotData = depotMap.get(depot)!;
-        
-        // Check if we already have this vehicle
-        const existingVehicle = depotData.vehicles.find(v => v.reg === vehicleReg);
-        
-        if (!existingVehicle) {
-          depotData.vehicles.push({
-            reg: vehicleReg,
-            lastReading: reading.reading,
-            date: reading.date
-          });
-          depotData.totalOdometer += reading.reading;
-          depotData.vehicleCount += 1;
-        } else {
-          // Update if this reading is more recent
-          const existingDate = new Date(existingVehicle.date);
-          const currentDate = new Date(reading.date);
-          
-          if (currentDate > existingDate) {
-            depotData.totalOdometer = depotData.totalOdometer - existingVehicle.lastReading + reading.reading;
-            existingVehicle.lastReading = reading.reading;
-            existingVehicle.date = reading.date;
-          }
-        }
+        depotGroups[depot].push(vehicle);
       });
 
-      return Array.from(depotMap.values());
+      // Calculate summary for each depot
+      const summary: OdometerSummary[] = Object.entries(depotGroups).map(([depot, depotVehicles]) => {
+        const vehicleDetails = depotVehicles.map((vehicle: any) => {
+          const vehicleReadings = readings?.filter((r: any) => r.chassis_number === vehicle.chassis_number) || [];
+          const lastReading = vehicleReadings[0];
+          
+          return {
+            reg: vehicle.registration_number || 'N/A',
+            lastReading: lastReading?.reading_value || 0,
+            date: lastReading?.reading_date || 'No readings'
+          };
+        });
+
+        return {
+          depot,
+          totalOdometer: vehicleDetails.reduce((sum, v) => sum + v.lastReading, 0),
+          vehicleCount: vehicleDetails.length,
+          vehicles: vehicleDetails
+        };
+      });
+
+      return summary;
     } catch (error) {
       console.error('Error in getOdometerSummary:', error);
       return [];
