@@ -148,7 +148,7 @@ export const OdometerPage: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'upload') && (
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -169,7 +169,7 @@ export const OdometerPage: React.FC = () => {
           </div>
         </div>
 
-        {showAddForm && user?.role === 'admin' && (
+        {showAddForm && (user?.role === 'admin' || user?.role === 'upload') && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Odometer Reading</h3>
             <form onSubmit={handleAddReading} className="space-y-4">

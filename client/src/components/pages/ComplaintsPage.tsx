@@ -127,7 +127,7 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
             <div className="text-sm text-gray-500">
               {filteredComplaints.length} complaint{filteredComplaints.length !== 1 ? 's' : ''} found
             </div>
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'upload') && (
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
                 className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -139,7 +139,7 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
           </div>
         </div>
 
-        {showAddForm && user?.role === 'admin' && (
+        {showAddForm && (user?.role === 'admin' || user?.role === 'upload') && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Complaint</h3>
             <form onSubmit={handleAddComplaint} className="space-y-4">
