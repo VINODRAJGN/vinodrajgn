@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Download, Eye, Loader, X } from 'lucide-react';
+import { Upload, FileText, Download, Eye, Loader, X, AlertCircle } from 'lucide-react';
 import { Vehicle, FileUpload } from '../../types';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,7 +9,6 @@ interface SOPPageProps {
 }
 
 export const SOPPage: React.FC<SOPPageProps> = ({ vehicles }) => {
-  const [selectedVehicle, setSelectedVehicle] = useState('');
   const [files, setFiles] = useState<FileUpload[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -17,17 +16,13 @@ export const SOPPage: React.FC<SOPPageProps> = ({ vehicles }) => {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (selectedVehicle) {
-      loadFiles();
-    }
-  }, [selectedVehicle]);
+    loadFiles();
+  }, []);
 
   const loadFiles = async () => {
-    if (!selectedVehicle) return;
-    
     try {
       setLoading(true);
-      const data = await apiService.getFilesByType('sop', selectedVehicle);
+      const data = await apiService.getFilesByType('sop');
       setFiles(data);
     } catch (error) {
       console.error('Error loading SOP files:', error);
@@ -38,10 +33,10 @@ export const SOPPage: React.FC<SOPPageProps> = ({ vehicles }) => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !selectedVehicle) return;
+    if (!file) return;
 
-    if (user?.role === 'guest') {
-      alert('Guests cannot upload files.');
+    if (user?.role === 'viewer') {
+      alert('Viewers cannot upload files.');
       return;
     }
 
@@ -51,26 +46,22 @@ export const SOPPage: React.FC<SOPPageProps> = ({ vehicles }) => {
       return;
     }
 
-    const allowedTypes = ['xlsx', 'xls', 'csv', 'pdf'];
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!extension || !allowedTypes.includes(extension)) {
-      alert('Only XLSX, XLS, CSV, and PDF files are allowed.');
-      return;
-    }
-
     try {
       setUploading(true);
       const reader = new FileReader();
       reader.onload = async (e) => {
         const content = e.target?.result as string;
-        await apiService.uploadFile({
+        const uploadedFile = await apiService.uploadFile({
           name: file.name,
-          content,
-          chassis: selectedVehicle,
+          content: content.split(',')[1], // Remove data:mime;base64, prefix
+          chassis: 'GENERAL', // General SOP files not tied to specific vehicle
           type: 'sop'
         });
-        event.target.value = '';
-        loadFiles();
+        
+        if (uploadedFile) {
+          await loadFiles();
+          event.target.value = '';
+        }
       };
       reader.readAsDataURL(file);
     } catch (error) {
@@ -81,106 +72,188 @@ export const SOPPage: React.FC<SOPPageProps> = ({ vehicles }) => {
     }
   };
 
-  const canUpload = user?.role !== 'guest';
+  const isViewableFile = (fileName: string): boolean => {
+    const ext = fileName.toLowerCase().split('.').pop();
+    return ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '');
+  };
+
+  const handleViewFile = (file: FileUpload) => {
+    if (isViewableFile(file.name)) {
+      setViewingFile(file);
+    } else {
+      alert('Cannot view this file type. Only PDF and image files can be viewed.');
+    }
+  };
+
+  const downloadFile = (file: FileUpload) => {
+    try {
+      const byteCharacters = atob(file.content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray]);
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file.');
+    }
+  };
+
+  const renderFileViewer = () => {
+    if (!viewingFile) return null;
+
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(
+      viewingFile.name.toLowerCase().split('.').pop() || ''
+    );
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-4 max-w-4xl max-h-[90vh] overflow-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">{viewingFile.name}</h3>
+            <button
+              onClick={() => setViewingFile(null)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          
+          <div className="text-center">
+            {isImage ? (
+              <img
+                src={`data:image/${viewingFile.name.split('.').pop()};base64,${viewingFile.content}`}
+                alt={viewingFile.name}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+            ) : (
+              <iframe
+                src={`data:application/pdf;base64,${viewingFile.content}`}
+                className="w-full h-[70vh]"
+                title={viewingFile.name}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader className="h-8 w-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading SOP files...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">SOP for Maintenance</h2>
-        <p className="text-gray-600">Standard Operating Procedures Management</p>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Standard Operating Procedures</h2>
+        <p className="text-gray-600">Upload and manage SOP documents</p>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg p-6">
-        {canUpload && (
-          <div className="border-b border-gray-200 pb-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload SOP Document</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="vehicle-select" className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Vehicle
-                </label>
-                <select
-                  id="vehicle-select"
-                  value={selectedVehicle}
-                  onChange={(e) => setSelectedVehicle(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">-- Select a Vehicle --</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.chassis} value={vehicle.chassis}>
-                      {vehicle.reg || 'Unknown'} ({vehicle.chassis})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="file-input" className="block text-sm font-medium text-gray-700 mb-2">
-                  Select File (XLSX, XLS, CSV, PDF)
-                </label>
+        {/* File Upload Section */}
+        {(user?.role === 'admin' || user?.role === 'upload') && (
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border-2 border-dashed border-blue-300">
+            <div className="text-center">
+              <Upload className="h-12 w-12 text-blue-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload SOP Files</h3>
+              <p className="text-gray-600 mb-4">
+                Upload standard operating procedure documents (PDF, images, etc.)
+              </p>
+              
+              <label className="cursor-pointer">
                 <input
-                  id="file-input"
                   type="file"
-                  accept=".xlsx,.xls,.csv,.pdf"
+                  className="hidden"
                   onChange={handleFileUpload}
-                  disabled={!selectedVehicle || uploading}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                  disabled={uploading}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
                 />
-              </div>
-
-              {uploading && (
-                <div className="flex items-center space-x-2 text-green-600">
-                  <Loader className="h-4 w-4 animate-spin" />
-                  <span>Uploading file...</span>
-                </div>
-              )}
+                <span className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  {uploading ? (
+                    <>
+                      <Loader className="h-5 w-5 animate-spin mr-2" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-5 w-5 mr-2" />
+                      Choose File
+                    </>
+                  )}
+                </span>
+              </label>
+              
+              <p className="text-sm text-gray-500 mt-2">
+                Supported formats: PDF, DOC, DOCX, JPG, PNG, GIF, TXT (Max 5MB)
+              </p>
             </div>
           </div>
         )}
 
+        {/* Files List */}
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">SOP Documents</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">
+            Uploaded Files ({files.length})
+          </h3>
           
-          {!selectedVehicle ? (
-            <p className="text-gray-500 text-center py-8">Please select a vehicle to view SOP files.</p>
-          ) : loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader className="h-6 w-6 animate-spin text-green-600" />
-              <span className="ml-2 text-gray-600">Loading files...</span>
+          {files.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No SOP files uploaded yet</p>
             </div>
-          ) : files.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No SOP files uploaded for this vehicle.</p>
           ) : (
-            <div className="space-y-3">
-              {files.map((file, index) => (
-                <div key={file.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <FileText className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="font-medium text-gray-900">{file.name}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {files.map((file) => (
+                <div key={file.id} className="bg-gray-50 rounded-lg p-4 border">
+                  <div className="flex items-start space-x-3">
+                    <FileText className="h-8 w-8 text-blue-500 flex-shrink-0 mt-1" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-gray-900 truncate">{file.name}</h4>
                       <p className="text-sm text-gray-500">
-                        Uploaded on {new Date(file.uploadDate).toLocaleDateString()}
+                        Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
                       </p>
+                      
+                      <div className="flex items-center space-x-2 mt-3">
+                        {isViewableFile(file.name) ? (
+                          <button
+                            onClick={() => handleViewFile(file)}
+                            className="flex items-center px-3 py-1 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </button>
+                        ) : (
+                          <div className="flex items-center px-3 py-1 bg-orange-100 text-orange-700 rounded-md">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            Cannot View
+                          </div>
+                        )}
+                        
+                        <button
+                          onClick={() => downloadFile(file)}
+                          className="flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Download
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setViewingFile(file)}
-                      className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span>View</span>
-                    </button>
-                    <a
-                      href={file.content}
-                      download={file.name}
-                      className="flex items-center space-x-1 text-green-600 hover:text-green-700 font-medium"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </a>
                   </div>
                 </div>
               ))}
@@ -189,37 +262,7 @@ export const SOPPage: React.FC<SOPPageProps> = ({ vehicles }) => {
         </div>
       </div>
 
-      {/* File Viewer Modal */}
-      {viewingFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">{viewingFile.name}</h3>
-              <button
-                onClick={() => setViewingFile(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="p-6 overflow-auto max-h-[70vh]">
-              {viewingFile.name.endsWith('.pdf') ? (
-                <iframe
-                  src={viewingFile.content}
-                  className="w-full h-96 border border-gray-300 rounded-lg"
-                  title={viewingFile.name}
-                />
-              ) : (
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <p className="text-gray-600">
-                    Preview not available for this file type. Please download to view the content.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {renderFileViewer()}
     </div>
   );
 };

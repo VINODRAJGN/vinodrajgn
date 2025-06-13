@@ -46,12 +46,18 @@ export class AuthService {
     return userStr ? JSON.parse(userStr) : null;
   }
 
-  private getUserRole(email: string): 'admin' | 'upload' | 'guest' {
-    // Give vr@gmail.com admin access for full functionality
+  private getUserRole(email: string): 'admin' | 'upload' | 'viewer' {
+    // Admin users - full access to everything
     if (email === 'vr@gmail.com') return 'admin';
-    if (email.includes('admin')) return 'admin';
-    if (email.includes('upload')) return 'upload';
-    return 'guest';
+    
+    // Upload users - can upload files, add readings and complaints
+    if (email === 'uploader@vehiclefleet.com') return 'upload';
+    
+    // Viewer users - read-only access
+    if (email === 'viewer@vehiclefleet.com') return 'viewer';
+    
+    // Default to viewer role for unknown users
+    return 'viewer';
   }
 
   async checkAuthStatus(): Promise<User | null> {
