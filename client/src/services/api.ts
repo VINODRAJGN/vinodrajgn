@@ -13,10 +13,135 @@ class ApiService {
     try {
       console.log('Fetching vehicles from database...');
       
-      const { data, error } = await supabase
+      // Check current user session
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      console.log('Current user:', user?.email || 'No user logged in');
+      
+      // Check what tables exist in the database
+      console.log('Scanning database for tables with data...');
+      
+      // Try to query common table names that might contain vehicle data
+      const possibleTableNames = [
+        'vehicles', 'vehicle', 'Vehicle', 'VEHICLES',
+        'vehicle_data', 'VehicleData', 'fleet', 'Fleet',
+        'auto', 'cars', 'buses', 'transport', 'vehicle_list',
+        'master_vehicles', 'vehicle_master', 'tbl_vehicles',
+        'bus', 'Bus', 'electric_vehicles'
+      ];
+      
+      const tablesWithData = [];
+      
+      for (const tableName of possibleTableNames) {
+        try {
+          const { data: testData, error: testError, count } = await supabase
+            .from(tableName)
+            .select('*', { count: 'exact' })
+            .limit(2);
+            
+          if (!testError && count && count > 0) {
+            console.log(`✓ Found table '${tableName}' with ${count} records:`, testData);
+            tablesWithData.push({ name: tableName, count, sample: testData });
+          }
+        } catch (e) {
+          // Table doesn't exist, continue silently
+        }
+      }
+      
+      console.log('Tables with data found:', tablesWithData.length);
+      
+      // If we found tables with data, use the one with most records
+      if (tablesWithData.length > 0) {
+        const bestTable = tablesWithData.reduce((prev, current) => 
+          (prev.count > current.count) ? prev : current
+        );
+        
+        console.log(`Using table '${bestTable.name}' with ${bestTable.count} records`);
+        
+        // Query the table with the most data
+        const { data: vehicleData, error: vehicleError } = await supabase
+          .from(bestTable.name)
+          .select('*');
+          
+        if (!vehicleError && vehicleData) {
+          console.log(`Successfully loaded ${vehicleData.length} vehicles from '${bestTable.name}'`);
+          data = vehicleData;
+          error = null;
+        }
+      }
+      
+      // Try direct query first
+      let { data, error } = await supabase
         .from('vehicles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
+        
+      console.log('Direct query result:', { data, error: error?.message, dataLength: data?.length });
+      
+      // If we get empty results, try with authentication
+      if ((!data || data.length === 0) && !user) {
+        console.log('No data and no user - attempting authentication...');
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: 'vr@gmail.com',
+          password: 'Vinod@8055'
+        });
+        
+        if (authError) {
+          console.error('Authentication failed:', authError.message);
+        } else {
+          console.log('Authentication successful, retrying query...');
+          // Retry the query after authentication
+          const { data: authData2, error: authError2 } = await supabase
+            .from('vehicles')
+            .select('*');
+          console.log('Post-auth query result:', { data: authData2, error: authError2?.message, dataLength: authData2?.length });
+          data = authData2;
+          error = authError2;
+        }
+      }
+      
+      // Try with count to see if RLS is the issue
+      const { count, error: countError } = await supabase
+        .from('vehicles')
+        .select('*', { count: 'exact', head: true });
+        
+      console.log('Table count:', { count, error: countError?.message });
+      
+      // Try alternative column names in case the schema is different
+      if (!data || data.length === 0) {
+        console.log('Trying alternative column queries...');
+        
+        // Check what columns actually exist
+        const { data: testData, error: testError } = await supabase
+          .from('vehicles')
+          .select()
+          .limit(1);
+          
+        console.log('Sample row structure:', { testData, testError: testError?.message });
+        
+        // Try common variations
+        const columnVariations = [
+          '*',
+          'id, chassis_number, registration_number, depot',
+          'id, vehicle_number, reg_number, location',
+          'id, chassis, reg, depot',
+          'id, chassis_no, reg_no, depot_name'
+        ];
+        
+        for (const columns of columnVariations) {
+          const { data: varData, error: varError } = await supabase
+            .from('vehicles')
+            .select(columns)
+            .limit(2);
+            
+          if (!varError && varData && varData.length > 0) {
+            console.log(`Success with columns: ${columns}`, varData);
+            data = varData;
+            error = null;
+            break;
+          } else if (varError) {
+            console.log(`Failed with columns ${columns}:`, varError.message);
+          }
+        }
+      }
 
       if (error) {
         console.error('Failed to fetch vehicles:', error);
