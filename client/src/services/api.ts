@@ -16,6 +16,15 @@ class ApiService {
       // Check current user session
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       console.log('Current user:', user?.email || 'No user logged in');
+      console.log('Current user ID:', user?.id || 'No user ID');
+      
+      // Check total count in table (may be filtered by RLS)
+      const { count: totalCount, error: totalCountError } = await supabase
+        .from('vehicles')
+        .select('*', { count: 'exact', head: true });
+        
+      console.log('Vehicles visible to current user:', totalCount);
+      console.log('Count query error:', totalCountError?.message || 'none');
       
       // Check what tables exist in the database
       // Check the actual structure of the vehicles table
@@ -103,11 +112,11 @@ class ApiService {
       }
       
       // Try with count to see if RLS is the issue
-      const { count, error: countError } = await supabase
+      const { count, error: secondCountError } = await supabase
         .from('vehicles')
         .select('*', { count: 'exact', head: true });
         
-      console.log('Table count:', { count, error: countError?.message });
+      console.log('Table count:', { count, error: secondCountError?.message });
       
       // Try alternative column names in case the schema is different
       if (!data || data.length === 0) {
