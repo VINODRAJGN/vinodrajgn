@@ -56,6 +56,34 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
     }
   };
 
+  const handleAddComplaint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComplaint.chassis || !newComplaint.text) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      setAddingComplaint(true);
+      const currentDate = new Date().toISOString().split('T')[0];
+      await apiService.addComplaint({
+        chassis: newComplaint.chassis,
+        text: newComplaint.text,
+        status: newComplaint.status,
+        date: currentDate
+      });
+      
+      setNewComplaint({ chassis: '', text: '', status: 'open' });
+      setShowAddForm(false);
+      await loadComplaints();
+    } catch (error) {
+      console.error('Error adding complaint:', error);
+      alert('Failed to add complaint. Please try again.');
+    } finally {
+      setAddingComplaint(false);
+    }
+  };
+
   const filteredComplaints = complaints.filter(complaint => 
     statusFilter === 'all' || complaint.status === statusFilter
   );
@@ -95,10 +123,102 @@ export const ComplaintsPage: React.FC<ComplaintsPageProps> = ({ vehicles }) => {
             </select>
           </div>
           
-          <div className="text-sm text-gray-500">
-            {filteredComplaints.length} complaint{filteredComplaints.length !== 1 ? 's' : ''} found
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-500">
+              {filteredComplaints.length} complaint{filteredComplaints.length !== 1 ? 's' : ''} found
+            </div>
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Complaint
+              </button>
+            )}
           </div>
         </div>
+
+        {showAddForm && user?.role === 'admin' && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Complaint</h3>
+            <form onSubmit={handleAddComplaint} className="space-y-4">
+              <div>
+                <label htmlFor="vehicle-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Vehicle *
+                </label>
+                <select
+                  id="vehicle-select"
+                  value={newComplaint.chassis}
+                  onChange={(e) => setNewComplaint({ ...newComplaint, chassis: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Select a vehicle...</option>
+                  {vehicles.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.chassis}>
+                      {vehicle.reg} - {vehicle.chassis} ({vehicle.depot})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="complaint-text" className="block text-sm font-medium text-gray-700 mb-2">
+                  Complaint Description *
+                </label>
+                <textarea
+                  id="complaint-text"
+                  value={newComplaint.text}
+                  onChange={(e) => setNewComplaint({ ...newComplaint, text: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Describe the issue or complaint..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="status-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select
+                  id="status-select"
+                  value={newComplaint.status}
+                  onChange={(e) => setNewComplaint({ ...newComplaint, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="open">Open</option>
+                  <option value="cleared">Cleared</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingComplaint}
+                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {addingComplaint ? (
+                    <>
+                      <Loader className="h-4 w-4 animate-spin mr-2" />
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Complaint'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full">

@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Gauge, RefreshCw, Loader, Calendar } from 'lucide-react';
+import { Gauge, RefreshCw, Loader, Calendar, Plus } from 'lucide-react';
 import { OdometerSummary } from '../../types';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const OdometerPage: React.FC = () => {
   const [summaryData, setSummaryData] = useState<OdometerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'day' | 'week' | 'month'>('all');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addingReading, setAddingReading] = useState(false);
+  const [newReading, setNewReading] = useState({
+    chassis: '',
+    value: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadSummary();
+    loadVehicles();
   }, []);
 
   const loadSummary = async () => {
@@ -22,6 +33,45 @@ export const OdometerPage: React.FC = () => {
       console.error('Error loading odometer summary:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVehicles = async () => {
+    try {
+      const vehicleData = await apiService.getVehicles();
+      setVehicles(vehicleData);
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+    }
+  };
+
+  const handleAddReading = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newReading.chassis || !newReading.value || !newReading.date) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      setAddingReading(true);
+      await apiService.addOdometer({
+        chassis: newReading.chassis,
+        value: parseInt(newReading.value),
+        date: newReading.date
+      });
+      
+      setNewReading({ 
+        chassis: '', 
+        value: '', 
+        date: new Date().toISOString().split('T')[0] 
+      });
+      setShowAddForm(false);
+      await loadSummary();
+    } catch (error) {
+      console.error('Error adding odometer reading:', error);
+      alert('Failed to add odometer reading. Please try again.');
+    } finally {
+      setAddingReading(false);
     }
   };
 
@@ -97,15 +147,108 @@ export const OdometerPage: React.FC = () => {
             </select>
           </div>
           
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center space-x-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>{refreshing ? 'Refreshing...' : 'Refresh Data'}</span>
-          </button>
+          <div className="flex items-center space-x-4">
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Reading
+              </button>
+            )}
+            
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center space-x-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>{refreshing ? 'Refreshing...' : 'Refresh Data'}</span>
+            </button>
+          </div>
         </div>
+
+        {showAddForm && user?.role === 'admin' && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Odometer Reading</h3>
+            <form onSubmit={handleAddReading} className="space-y-4">
+              <div>
+                <label htmlFor="vehicle-select-odometer" className="block text-sm font-medium text-gray-700 mb-2">
+                  Vehicle *
+                </label>
+                <select
+                  id="vehicle-select-odometer"
+                  value={newReading.chassis}
+                  onChange={(e) => setNewReading({ ...newReading, chassis: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Select a vehicle...</option>
+                  {vehicles.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.chassis}>
+                      {vehicle.reg} - {vehicle.chassis} ({vehicle.depot})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="odometer-value" className="block text-sm font-medium text-gray-700 mb-2">
+                  Odometer Reading (km) *
+                </label>
+                <input
+                  type="number"
+                  id="odometer-value"
+                  value={newReading.value}
+                  onChange={(e) => setNewReading({ ...newReading, value: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter odometer reading..."
+                  min="0"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="reading-date" className="block text-sm font-medium text-gray-700 mb-2">
+                  Reading Date *
+                </label>
+                <input
+                  type="date"
+                  id="reading-date"
+                  value={newReading.date}
+                  onChange={(e) => setNewReading({ ...newReading, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingReading}
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {addingReading ? (
+                    <>
+                      <Loader className="h-4 w-4 animate-spin mr-2" />
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Reading'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Summary Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
